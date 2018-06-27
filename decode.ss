@@ -1,0 +1,187 @@
+; *********************************************
+; *  314 Principles of Programming Languages  *
+; *  Fall 2017                                *
+; *  Author: Sinan Sahin & Ulrich Kremer      *
+; *********************************************
+;; -----------------------------------------------------
+;; ENVIRONMENT
+;; contains "ltv", "vtl",and "reduce" definitions
+(load "include.ss")
+
+;; contains a test document consisting of three paragraphs. 
+(load "document.ss")
+
+;; contains a test-dictionary, which has a much smaller dictionary for testing
+;; the dictionary is needed for spell checking
+(load "test-dictionary.ss")
+
+;;(load "dictionary.ss") ;; the real thing with 45,000 words
+
+
+;; -----------------------------------------------------
+;; HELPER FUNCTIONS
+
+;;contains
+;;INPUT: i is item and l is list
+;;OUTPUT: true or false
+(define contains
+  (lambda (i l)
+    (cond
+      ((null? l) #f)
+      ((equal? i (car l)) #t)
+      (else (contains i (cdr l))))))
+
+;;encodeLetter
+;;INPUT: n is shift number and l is the letter
+;;OUTPUT: encoded letter
+(define encodeLetter
+  (lambda (n l)
+    (vtl (remainder (+ (ltv l) n) 26))))
+
+;;encodeWord
+;;INPUT: n is shift number and w is the word
+;;OUTPUT: encoded word
+(define encodeWord
+  (lambda (n w)
+    (cond
+      ((null? w) '())
+      (else
+       (append (cons (encodeLetter n (car w)) '()) (encodeWord n (cdr w)))))))
+
+;;findNprime
+;;INPUT: i is current shift number and p is the paragraph
+;;OUTPUT: n prime
+(define findNprime
+  (lambda (i p)
+    (cond
+      ((> i 25) -1)
+      ((spellCheckerExt p i) i)
+      (else (findNprime (+ i 1) p)))))
+
+;;spellCheckerExt
+;;INPUT: i is current shift number and p is the paragraph
+;;OUTPUT: true or false chechking if all the paragraph words are in the dictionary
+(define spellCheckerExt
+  (lambda (p i)
+    (cond
+      ((or (null? p) (not (list? p))) #t)
+      ((spell-checker (encodeWord i (car p))) (spellCheckerExt (cdr p) i))
+      (else #f))))
+
+;;frequencyCalculator
+;;INPUT: p is the paragraph
+;;OUTPUT: returns a vector corresponding to letters frequencies in p
+(define frequencyCalculator
+  (lambda (p)
+    (define vv (make-vector 26 0))
+    (for-each
+     (lambda (w)
+       (for-each
+        (lambda (l)
+          (vector-set! vv (ltv l) (+ (vector-ref vv (ltv l)) 1))) w)) p)
+    (vector->list vv)
+    ))
+
+;;maxl
+;;INPUT: lst is a list
+;;OUTPUT: returns the max element in list
+(define maxl
+  (lambda (lst)
+    (cond
+      ((null? (cdr lst)) (car lst))
+      ((> (car lst) (maxl (cdr lst))) (car lst))
+      (else (maxl (cdr lst))))))
+
+;;getindex
+;;INPUT: e is item were trying to find and lst is a list
+;;OUTPUT: returns the index of the element in list
+(define getindex
+  (lambda (e lst)
+    (if (null? lst)
+        -1
+        (if (eq? (car lst) e)
+            0
+            (if (= (getindex e (cdr lst)) -1)
+                -1
+                (+ 1 (getindex e (cdr lst))))))))
+;; -----------------------------------------------------
+;; SPELL CHECKER FUNCTION
+
+;;check a word's spell correctness
+;;INPUT:a word(a global variable "dictionary" is included in the file "test-dictionary.ss", and can be used directly here)
+;;OUTPUT:true(#t) or false(#f)
+(define spell-checker 
+  (lambda (w)
+    (contains w dictionary)))
+
+;; -----------------------------------------------------
+;; ENCODING FUNCTIONS
+
+;;generate an Caesar Cipher single word encoders
+;;INPUT:a number "n"
+;;OUTPUT:a function, whose input is a word, and output is the encoded word
+(define encode-n
+  (lambda (n);;"n" is the distance, eg. n=3: a->d,b->e,...z->c
+    (lambda (w);;"w" is the word to be encoded
+      (define enW (encodeWord n w))
+      enW
+      )))
+
+;;encode a document
+;;INPUT: a document "d" and a "encoder"
+;;OUTPUT: an encoded document using a provided encoder
+(define encode-d;;this encoder is supposed to be the output of "encode-n"
+  (lambda (d encoder)
+    (cond
+      ((null? d) '())
+      ((list? (car d))
+       (append (cons (encode-d (car d) encoder) '()) (encode-d (cdr d) encoder)))
+      (else
+       (encoder d)))
+    ))
+    
+;; -----------------------------------------------------
+;; DECODE FUNCTION GENERATORS
+;; 2 generators should be implemented, and each of them returns a decoder
+
+;;generate a decoder using brute-force-version spell-checker
+;;INPUT:an encoded paragraph "p"
+;;OUTPUT:a decoder, whose input=a word, output=decoded word
+(define Gen-Decoder-A
+  (lambda (p)
+    (define nprime (findNprime 0 p))
+    (lambda (w)
+      (encodeWord nprime w))))
+
+;;generate a decoder using frequency analysis
+;;INPUT:same as above
+;;OUTPUT:same as above
+(define Gen-Decoder-B
+  (lambda (p)
+    (define index (getindex (maxl (frequencyCalculator p)) (frequencyCalculator p)))
+    (lambda (w)
+      (if (> index 4)
+          (encodeWord (- 26 (- index 4)) w)
+          (encodeWord (- 4 index) w))
+      )))
+;; -----------------------------------------------------
+;; CODE-BREAKER FUNCTION
+
+;;a codebreaker
+;;INPUT: an encoded document(of course by a Caesar's Cipher), a decoder(generated by functions above)
+;;OUTPUT: a decoded document
+(define Code-Breaker
+  (lambda (d decoder)
+    (encode-d d decoder)))
+
+;; -----------------------------------------------------
+;; EXAMPLE APPLICATIONS OF FUNCTIONS
+;;(spell-checker '(h e l l o))
+;;(define add5 (encode-n 67))
+;;(define doc (encode-d test-document add5))
+;;(define paragraph (cadddr doc))
+;;(define paragraph (car doc))
+;;(define decoderSP1 (Gen-Decoder-A paragraph))
+;;(define decoderFA1 (Gen-Decoder-B paragraph))
+;;(Code-Breaker doc decoderSP1)
+;;(Code-Breaker doc decoderFA1)
